@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOLMAR HEAT II — Open World Crime | Solmar City</title>
+<!--
+  SOLMAR HEAT II — game/index.html
+  HUD DOM: title menu (centered panel so the city + HUD stay visible),
+  money / respect rank / wanted stars, health + armor, speed, weapon +
+  ammo, radio station, mission objective, race timer, message feed,
+  live 2D minimap canvas, crosshair, mission banner, shop panel,
+  game-over and all-missions ending overlays. No network references:
+  every src/href is a local file. Import map: "three" -> vendored three.
+-->
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #0a1420; font-family: Arial, Helvetica, sans-serif; }
+  #game { position: fixed; inset: 0; }
+  canvas { display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+  #hud-money { position: absolute; top: 14px; right: 16px; font-size: 28px; font-weight: bold; color: #7dff9a; text-shadow: 2px 2px 0 #000; }
+  #hud-rank { position: absolute; top: 46px; right: 16px; font-size: 14px; font-weight: bold; color: #00e5ff; text-shadow: 2px 2px 0 #000; }
+  #hud-stars { position: absolute; top: 68px; right: 16px; font-size: 26px; color: #ffd23f; text-shadow: 2px 2px 0 #000; letter-spacing: 2px; }
+  #hud-health { position: absolute; bottom: 16px; right: 16px; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
+  #hud-armor { position: absolute; bottom: 40px; right: 16px; font-size: 15px; font-weight: bold; color: #9ecfff; text-shadow: 2px 2px 0 #000; }
+  #hud-speed { position: absolute; bottom: 64px; right: 16px; font-size: 22px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
+  #hud-weapon { position: absolute; bottom: 92px; right: 16px; font-size: 16px; font-weight: bold; color: #ffd23f; text-shadow: 2px 2px 0 #000; }
+  #hud-radio { position: absolute; bottom: 116px; right: 16px; font-size: 14px; color: #ff9ad5; text-shadow: 2px 2px 0 #000; }
+  #hud-mission { position: absolute; top: 14px; left: 16px; max-width: 430px; font-size: 15px; line-height: 1.45; background: rgba(0,0,0,0.55); padding: 10px 12px; border-left: 4px solid #ffc233; border-radius: 4px; }
+  #hud-race { position: absolute; top: 96px; left: 16px; font-size: 16px; font-weight: bold; color: #ff7a2a; text-shadow: 2px 2px 0 #000; }
+  #hud-msg { position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%); font-size: 19px; font-weight: bold; background: rgba(0,0,0,0.65); padding: 10px 18px; border-radius: 6px; opacity: 0; transition: opacity 0.3s; text-align: center; max-width: 640px; }
+  #hud-feed { position: absolute; top: 130px; left: 16px; font-size: 13px; color: #ddd; text-shadow: 1px 1px 0 #000; line-height: 1.5; max-width: 380px; }
+  #banner { position: absolute; top: 38%; left: 50%; transform: translateX(-50%); font-size: 26px; font-weight: bold; color: #ffc233; background: rgba(0,0,0,0.7); padding: 14px 24px; border-radius: 8px; border: 2px solid #ffc233; opacity: 0; transition: opacity 0.3s; text-align: center; max-width: 700px; }
+  #minimap { position: absolute; bottom: 16px; left: 16px; width: 170px; height: 170px; border: 2px solid rgba(255,255,255,0.7); border-radius: 8px; background: rgba(10,20,30,0.85); }
+  #crosshair { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; display: none; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #crosshair::after { top: 8px; left: 0; width: 18px; height: 2px; }
+  #controls-hint { position: absolute; bottom: 16px; left: 196px; font-size: 12px; color: #ddd; text-shadow: 1px 1px 0 #000; line-height: 1.5; max-width: 420px; }
+  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; z-index: 10; text-align: center; pointer-events: none; }
+  .panel { pointer-events: auto; background: linear-gradient(160deg, rgba(10,20,40,0.92), rgba(60,10,40,0.88)); border: 2px solid rgba(255,194,51,0.6); border-radius: 12px; padding: 28px 36px; max-width: 620px; }
+  .overlay h1 { font-size: 56px; margin: 0; letter-spacing: 4px; color: #ffc233; text-shadow: 0 0 24px #ff2e88, 3px 3px 0 #000; }
+  .overlay h2 { font-size: 18px; margin: 8px 0 4px; color: #00e5ff; letter-spacing: 2px; }
+  .overlay p { max-width: 560px; font-size: 15px; line-height: 1.6; color: #eee; }
+  .overlay button { pointer-events: auto; margin: 8px; padding: 13px 30px; font-size: 17px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; background: #ffc233; color: #111; }
+  .overlay button:hover { background: #ffd75e; }
+  .overlay button.secondary { background: #222; color: #fff; border: 1px solid #888; }
+  #gameover, #ending { display: none; }
+  #menu { display: flex; }
+  #shop-panel { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 12; background: rgba(8,16,28,0.96); border: 2px solid #00e5ff; border-radius: 10px; color: #fff; padding: 18px 22px; width: 420px; max-width: 90vw; }
+  #shop-panel h2 { margin: 0 0 10px; color: #00e5ff; font-size: 20px; }
+  .shop-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #333; font-size: 14px; }
+  .shop-row button { padding: 7px 14px; font-weight: bold; border: none; border-radius: 5px; background: #ffc233; color: #111; cursor: pointer; }
+  .shop-row button:disabled { background: #555; color: #999; cursor: default; }
+  .shop-money { font-weight: bold; color: #7dff9a; padding-bottom: 8px; }
+  #shop-close { margin-top: 12px; width: 100%; padding: 10px; font-weight: bold; border: none; border-radius: 6px; background: #222; color: #fff; border: 1px solid #888; cursor: pointer; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+  <div id="hud-mission">MISI 1/10 — Paket untuk Marisol</div>
+  <div id="hud-race"></div>
+  <div id="hud-feed"></div>
+  <div id="hud-money">$500</div>
+  <div id="hud-rank">Rookie · 0 respect</div>
+  <div id="hud-stars">☆☆☆☆☆</div>
+  <div id="hud-health">HP 100</div>
+  <div id="hud-armor"></div>
+  <div id="hud-speed"></div>
+  <div id="hud-weapon">Pistol P9 12 / 36</div>
+  <div id="hud-radio">♪ SOLMAR FM</div>
+  <canvas id="minimap" width="170" height="170"></canvas>
+  <div id="controls-hint">WASD jalan / nyetir · E masuk-keluar / curi mobil · Klik kiri pukul, klik kanan tembak · 1-4 senjata · Spasi rem tangan · Shift lari · F interaksi / balapan · G toko · Q Marisol · C Rico · R radio · Esc jeda · M mute</div>
+  <div id="hud-msg"></div>
+  <div id="banner"></div>
+  <div id="crosshair"></div>
+</div>
+<div id="shop-panel">
+  <h2 id="shop-title">TOKO</h2>
+  <div id="shop-list"></div>
+  <button id="shop-close">TUTUP (Esc)</button>
+</div>
+<div id="menu" class="overlay">
+  <div class="panel">
+    <h1>SOLMAR HEAT II</h1>
+    <h2 id="menu-title">SOLMAR CITY — 10 MISI · 5 BINTANG SBPD · CONDOR-1</h2>
+    <p>Jax Moreno kembali ke Solmar City. Kane Rooker menguasai kasino, gudang, dan jalanan — Marisol Vega membangun kru baru, dan Jax adalah kuncinya. Curi mobil, kabur dari SBPD, menangkan balapan, rampok Casino Sol, dan jatuhkan Kane.</p>
+    <p>WASD bergerak &amp; menyetir · E curi / keluar mobil · Klik kiri pukul · Klik kanan tembak · 1-4 ganti senjata · Spasi rem tangan · Shift lari · F interaksi / balapan · G toko · Q panggil Marisol · C panggil Rico · R radio · Esc jeda · M mute</p>
+    <div>
+      <button id="btn-start">MULAI BARU</button>
+      <button id="btn-continue" class="secondary">LANJUTKAN SAVE</button>
+      <button id="btn-mute" class="secondary">SUARA: ON</button>
+    </div>
+    <p style="font-size:12px;color:#aaa">Game orisinal — kota, karakter, dan cerita buatan sendiri. Tanpa jaringan, semua aset lokal.</p>
+  </div>
+</div>
+<div id="gameover" class="overlay">
+  <div class="panel">
+    <h1>GAME OVER</h1>
+    <p id="gameover-stats"></p>
+    <div><button id="btn-restart">COBA LAGI</button></div>
+  </div>
+</div>
+<div id="ending" class="overlay">
+  <div class="panel">
+    <h1>KANE KALAH!</h1>
+    <p>Jax mengalahkan Kane Rooker di gudangnya dan kabur lewat dermaga saat fajar. Casino Sol, gudang, dan jalanan Solmar City kini milik kru Marisol — dan nama Jax Moreno jadi legenda kota matahari.</p>
+    <p>Semua 10 misi selesai. Terima kasih sudah bermain SOLMAR HEAT II.</p>
+    <div><button id="btn-ending-restart">MAIN LAGI</button></div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
